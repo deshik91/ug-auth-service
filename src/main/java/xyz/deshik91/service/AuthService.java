@@ -3,6 +3,7 @@ package xyz.deshik91.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import xyz.deshik91.dto.request.LoginRequest;
 import xyz.deshik91.dto.request.RegisterRequest;
 import xyz.deshik91.dto.response.AuthResponse;
 import xyz.deshik91.model.Invitation;
@@ -65,5 +66,29 @@ public class AuthService {
         userStore.saveUser(savedUser); // обновляем пользователя с токеном
 
         return new AuthResponse(accessToken, refreshToken, 15 * 60L); // 15 минут в секундах
+    }
+
+    // Добавь этот метод в класс AuthService
+    public AuthResponse login(LoginRequest request) {
+        // 1. Ищем пользователя по email
+        User user = userStore.findByEmail(request.getEmail());
+        if (user == null) {
+            throw new RuntimeException("Неверный email или пароль");
+        }
+
+        // 2. Проверяем пароль
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new RuntimeException("Неверный email или пароль");
+        }
+
+        // 3. Генерируем новые токены
+        String accessToken = jwtUtil.generateAccessToken(user.getEmail());
+        String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
+
+        // 4. Обновляем refresh токен у пользователя (для возможности инвалидации)
+        user.setRefreshToken(refreshToken);
+        userStore.saveUser(user);
+
+        return new AuthResponse(accessToken, refreshToken, 15 * 60L);
     }
 }
