@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  postgres-auth:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+    ports:
+      - "5433:5432"  # Пробрасываем на 5433 хоста, чтобы не конфликтовать с другими БД
+    volumes:
+      - auth_data:/var/lib/postgresql/data
+
+  auth-app:
+    build: .  # Собирает образ из Dockerfile в текущей папке
+    depends_on:
+      - postgres-auth
+    ports:
+      - "8081:8080"  # Сервис будет доступен на порту 8081
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_HOST: postgres-auth
+      DB_PORT: 5432
+      DB_NAME: auth_db
+      DB_USER: auth_user
+      DB_PASSWORD: auth_pass
+    volumes:
+      - ./target:/app/target  # Для быстрой пересборки (опционально)
+
+volumes:
+  auth_data:
