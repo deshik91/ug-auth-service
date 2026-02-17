@@ -12,10 +12,10 @@ jobs:
       - name: Скачиваем код из репозитория
         uses: actions/checkout@v3
 
-      - name: Устанавливаем Java 25
+      - name: Устанавливаем Java 21
         uses: actions/setup-java@v3
         with:
-          java-version: '25'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Собираем проект и запускаем тесты
