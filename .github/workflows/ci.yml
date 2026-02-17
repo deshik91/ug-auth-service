@@ -1,0 +1,22 @@
+name: CI for Auth Service
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Скачиваем код из репозитория
+        uses: actions/checkout@v3
+
+      - name: Устанавливаем Java 25
+        uses: actions/setup-java@v3
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Собираем проект и запускаем тесты
+        run: mvn clean verify
