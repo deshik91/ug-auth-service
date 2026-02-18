@@ -7,6 +7,7 @@ import xyz.deshik91.dto.request.LoginRequest;
 import xyz.deshik91.dto.request.RefreshTokenRequest;
 import xyz.deshik91.dto.request.RegisterRequest;
 import xyz.deshik91.dto.response.AuthResponse;
+import xyz.deshik91.dto.response.ValidateResponse;
 import xyz.deshik91.model.Invitation;
 import xyz.deshik91.model.User;
 import xyz.deshik91.repository.InMemoryUserStore;
@@ -139,5 +140,48 @@ public class AuthService {
         userStore.saveUser(user);
 
         return new AuthResponse(newAccessToken, newRefreshToken, 15 * 60L);
+    }
+
+    public ValidateResponse validateToken(String authorizationHeader) {
+        // 1. Проверяем что заголовок вообще есть
+        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+            return new ValidateResponse(null, false, null);
+        }
+
+        // 2. Извлекаем токен (отрезаем "Bearer ")
+        String token = authorizationHeader.substring(7);
+
+        try {
+            // 3. Извлекаем email из токена
+            String email = jwtUtil.extractEmail(token);
+
+            // 4. Проверяем тип токена (обычно валидируют access токены)
+            String tokenType = jwtUtil.extractTokenType(token);
+
+            // 5. Проверяем валидность токена
+            boolean isValid = jwtUtil.validateToken(token, email);
+
+            if (!isValid) {
+                return new ValidateResponse(null, false, null);
+            }
+
+            // 6. Проверяем, что пользователь всё ещё существует
+            User user = userStore.findByEmail(email);
+            if (user == null) {
+                return new ValidateResponse(null, false, null);
+            }
+
+            // Для refresh токенов можно дополнительно проверить, что это именно тот токен, который мы выдали
+            if ("refresh".equals(tokenType)) {
+                // Обычно для проверки используют access токены, но если пришел refresh - тоже ок
+                // Можем просто вернуть инфу
+            }
+
+            return new ValidateResponse(email, true, tokenType);
+
+        } catch (Exception e) {
+            // Любая ошибка парсинга токена = невалидный токен
+            return new ValidateResponse(null, false, null);
+        }
     }
 }

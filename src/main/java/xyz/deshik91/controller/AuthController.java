@@ -2,12 +2,14 @@ package xyz.deshik91.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import xyz.deshik91.dto.request.LoginRequest;
 import xyz.deshik91.dto.request.RefreshTokenRequest;
 import xyz.deshik91.dto.request.RegisterRequest;
 import xyz.deshik91.dto.response.AuthResponse;
+import xyz.deshik91.dto.response.ValidateResponse;
 import xyz.deshik91.service.AuthService;
 
 @RestController
@@ -36,8 +38,13 @@ public class AuthController {
     }
 
     @GetMapping("/validate")
-    public ResponseEntity<?> validate(@RequestHeader("Authorization") String token) {
-        // TODO: реализовать позже
-        return ResponseEntity.ok("Валидация пока не реализована");
+    public ResponseEntity<ValidateResponse> validate(@RequestHeader("Authorization") String authorization) {
+        ValidateResponse response = authService.validateToken(authorization);
+
+        if (response.isValid()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
     }
 }
