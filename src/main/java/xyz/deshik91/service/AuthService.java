@@ -3,14 +3,16 @@ package xyz.deshik91.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import xyz.deshik91.dto.request.LoginRequest;
 import xyz.deshik91.dto.request.RefreshTokenRequest;
 import xyz.deshik91.dto.request.RegisterRequest;
 import xyz.deshik91.dto.response.AuthResponse;
 import xyz.deshik91.dto.response.ValidateResponse;
-import xyz.deshik91.model.Invitation;
-import xyz.deshik91.model.User;
-import xyz.deshik91.repository.InMemoryUserStore;
+import xyz.deshik91.entity.InvitationEntity;
+import xyz.deshik91.entity.UserEntity;
+import xyz.deshik91.repository.InvitationRepository;
+import xyz.deshik91.repository.UserRepository;
 import xyz.deshik91.security.JwtUtil;
 
 import java.time.Instant;
@@ -19,21 +21,21 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private final InMemoryUserStore userStore;
+    private final UserRepository userRepository;
+    private final InvitationRepository invitationRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
+    @Transactional
     public AuthResponse register(RegisterRequest request) {
         // 1. Проверяем, не занят ли email
-        if (userStore.findByEmail(request.getEmail()) != null) {
+        if (userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("Email уже зарегистрирован");
         }
 
         // 2. Проверяем инвайт-код
-        Invitation invitation = userStore.findInvitationByCode(request.getInvitationCode());
-        if (invitation == null) {
-            throw new RuntimeException("Неверный код приглашения");
-        }
+        InvitationEntity invitation = invitationRepository.findByCode(request.getInvitationCode())
+                .orElseThrow(() -> new RuntimeException("Неверный код приглашения"));
 
         if (invitation.isUsed()) {
             throw new RuntimeException("Код приглашения уже использован");
@@ -49,51 +51,51 @@ public class AuthService {
         }
 
         // 3. Создаем пользователя
-        User user = new User();
+        UserEntity user = new UserEntity();
         user.setEmail(request.getEmail());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setCreatedAt(Instant.now());
 
-        User savedUser = userStore.saveUser(user);
+        UserEntity savedUser = userRepository.save(user);
 
         // 4. Помечаем инвайт как использованный
-        userStore.markInvitationAsUsed(request.getInvitationCode());
+        invitation.setUsed(true);
+        invitationRepository.save(invitation);
 
         // 5. Генерируем токены
         String accessToken = jwtUtil.generateAccessToken(savedUser.getEmail());
         String refreshToken = jwtUtil.generateRefreshToken(savedUser.getEmail());
 
-        // 6. Сохраняем refresh токен (чтобы можно было инвалидировать)
+        // 6. Сохраняем refresh токен
         savedUser.setRefreshToken(refreshToken);
-        userStore.saveUser(savedUser); // обновляем пользователя с токеном
+        userRepository.save(savedUser);
 
-        return new AuthResponse(accessToken, refreshToken, 15 * 60L); // 15 минут в секундах
+        return new AuthResponse(accessToken, refreshToken, 15 * 60L);
     }
 
-    // Добавь этот метод в класс AuthService
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         // 1. Ищем пользователя по email
-        User user = userStore.findByEmail(request.getEmail());
-        if (user == null) {
-            throw new RuntimeException("Неверный email или пароль");
-        }
+        UserEntity user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new RuntimeException("Неверный email или пароль"));
 
         // 2. Проверяем пароль
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new RuntimeException("Неверный email или пароль");
         }
 
-        // 3. Генерируем новые токены (всегда новые, даже если пользователь уже входил)
+        // 3. Генерируем новые токены
         String accessToken = jwtUtil.generateAccessToken(user.getEmail());
         String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
 
-        // 4. Обновляем refresh токен у пользователя (старый становится недействительным)
+        // 4. Обновляем refresh токен
         user.setRefreshToken(refreshToken);
-        userStore.saveUser(user);
+        userRepository.save(user);
 
         return new AuthResponse(accessToken, refreshToken, 15 * 60L);
     }
 
+    @Transactional
     public AuthResponse refresh(RefreshTokenRequest request) {
         // 1. Извлекаем email из refresh токена
         String email;
@@ -103,7 +105,7 @@ public class AuthService {
             throw new RuntimeException("Невалидный refresh токен");
         }
 
-        // 2. Проверяем тип токена (должен быть refresh)
+        // 2. Проверяем тип токена
         String tokenType;
         try {
             tokenType = jwtUtil.extractTokenType(request.getRefreshToken());
@@ -116,71 +118,56 @@ public class AuthService {
         }
 
         // 3. Ищем пользователя
-        User user = userStore.findByEmail(email);
-        if (user == null) {
-            throw new RuntimeException("Пользователь не найден");
-        }
+        UserEntity user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
 
-        // 4. Проверяем, что refresh токен совпадает с тем, что мы выдали
+        // 4. Проверяем, что refresh токен совпадает
         if (user.getRefreshToken() == null || !user.getRefreshToken().equals(request.getRefreshToken())) {
             throw new RuntimeException("Refresh токен недействителен или был отозван");
         }
 
-        // 5. Проверяем, не истек ли refresh токен
+        // 5. Проверяем, не истек ли токен
         if (!jwtUtil.validateToken(request.getRefreshToken(), email)) {
             throw new RuntimeException("Refresh токен истек");
         }
 
-        // 6. Генерируем новую пару токенов
+        // 6. Генерируем новую пару
         String newAccessToken = jwtUtil.generateAccessToken(email);
         String newRefreshToken = jwtUtil.generateRefreshToken(email);
 
-        // 7. Обновляем refresh токен у пользователя (ротация токенов)
+        // 7. Обновляем токен у пользователя
         user.setRefreshToken(newRefreshToken);
-        userStore.saveUser(user);
+        userRepository.save(user);
 
         return new AuthResponse(newAccessToken, newRefreshToken, 15 * 60L);
     }
 
+    @Transactional(readOnly = true)
     public ValidateResponse validateToken(String authorizationHeader) {
-        // 1. Проверяем что заголовок вообще есть
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
             return new ValidateResponse(null, false, null);
         }
 
-        // 2. Извлекаем токен (отрезаем "Bearer ")
         String token = authorizationHeader.substring(7);
 
         try {
-            // 3. Извлекаем email из токена
             String email = jwtUtil.extractEmail(token);
-
-            // 4. Проверяем тип токена (обычно валидируют access токены)
             String tokenType = jwtUtil.extractTokenType(token);
-
-            // 5. Проверяем валидность токена
             boolean isValid = jwtUtil.validateToken(token, email);
 
             if (!isValid) {
                 return new ValidateResponse(null, false, null);
             }
 
-            // 6. Проверяем, что пользователь всё ещё существует
-            User user = userStore.findByEmail(email);
-            if (user == null) {
+            // Проверяем, что пользователь существует
+            boolean userExists = userRepository.existsByEmail(email);
+            if (!userExists) {
                 return new ValidateResponse(null, false, null);
-            }
-
-            // Для refresh токенов можно дополнительно проверить, что это именно тот токен, который мы выдали
-            if ("refresh".equals(tokenType)) {
-                // Обычно для проверки используют access токены, но если пришел refresh - тоже ок
-                // Можем просто вернуть инфу
             }
 
             return new ValidateResponse(email, true, tokenType);
 
         } catch (Exception e) {
-            // Любая ошибка парсинга токена = невалидный токен
             return new ValidateResponse(null, false, null);
         }
     }
