@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import xyz.deshik91.dto.request.LoginRequest;
+import xyz.deshik91.dto.request.RefreshTokenRequest;
 import xyz.deshik91.dto.request.RegisterRequest;
 import xyz.deshik91.dto.response.AuthResponse;
 import xyz.deshik91.model.Invitation;
@@ -81,14 +82,62 @@ public class AuthService {
             throw new RuntimeException("Неверный email или пароль");
         }
 
-        // 3. Генерируем новые токены
+        // 3. Генерируем новые токены (всегда новые, даже если пользователь уже входил)
         String accessToken = jwtUtil.generateAccessToken(user.getEmail());
         String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
 
-        // 4. Обновляем refresh токен у пользователя (для возможности инвалидации)
+        // 4. Обновляем refresh токен у пользователя (старый становится недействительным)
         user.setRefreshToken(refreshToken);
         userStore.saveUser(user);
 
         return new AuthResponse(accessToken, refreshToken, 15 * 60L);
+    }
+
+    public AuthResponse refresh(RefreshTokenRequest request) {
+        // 1. Извлекаем email из refresh токена
+        String email;
+        try {
+            email = jwtUtil.extractEmail(request.getRefreshToken());
+        } catch (Exception e) {
+            throw new RuntimeException("Невалидный refresh токен");
+        }
+
+        // 2. Проверяем тип токена (должен быть refresh)
+        String tokenType;
+        try {
+            tokenType = jwtUtil.extractTokenType(request.getRefreshToken());
+        } catch (Exception e) {
+            throw new RuntimeException("Невалидный refresh токен");
+        }
+
+        if (!"refresh".equals(tokenType)) {
+            throw new RuntimeException("Неверный тип токена. Ожидался refresh токен");
+        }
+
+        // 3. Ищем пользователя
+        User user = userStore.findByEmail(email);
+        if (user == null) {
+            throw new RuntimeException("Пользователь не найден");
+        }
+
+        // 4. Проверяем, что refresh токен совпадает с тем, что мы выдали
+        if (user.getRefreshToken() == null || !user.getRefreshToken().equals(request.getRefreshToken())) {
+            throw new RuntimeException("Refresh токен недействителен или был отозван");
+        }
+
+        // 5. Проверяем, не истек ли refresh токен
+        if (!jwtUtil.validateToken(request.getRefreshToken(), email)) {
+            throw new RuntimeException("Refresh токен истек");
+        }
+
+        // 6. Генерируем новую пару токенов
+        String newAccessToken = jwtUtil.generateAccessToken(email);
+        String newRefreshToken = jwtUtil.generateRefreshToken(email);
+
+        // 7. Обновляем refresh токен у пользователя (ротация токенов)
+        user.setRefreshToken(newRefreshToken);
+        userStore.saveUser(user);
+
+        return new AuthResponse(newAccessToken, newRefreshToken, 15 * 60L);
     }
 }

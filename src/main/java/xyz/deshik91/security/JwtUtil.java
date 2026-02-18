@@ -37,6 +37,9 @@ public class JwtUtil {
     }
 
     private String createToken(Map<String, Object> claims, String subject, long expiration) {
+        // Добавляем уникальный идентификатор (jti) чтобы токены были разными
+        claims.put("jti", java.util.UUID.randomUUID().toString());
+
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(subject)

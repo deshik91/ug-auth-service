@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class InMemoryUserStore {
     private final Map<String, User> usersByEmail = new ConcurrentHashMap<>();
     private final Map<String, Invitation> invitationsByCode = new ConcurrentHashMap<>();
-    private final AtomicLong userIdCounter = new AtomicLong(1);
+    private AtomicLong userIdCounter = new AtomicLong(1);
 
     // Пользователи
     public User saveUser(User user) {
@@ -64,5 +64,12 @@ public class InMemoryUserStore {
                 Instant.now()
         );
         invitationsByCode.put(specificInv.getCode(), specificInv);
+    }
+
+    // Добавь новый метод для очистки
+    public void clear() {
+        usersByEmail.clear();
+        invitationsByCode.clear();
+        userIdCounter = new AtomicLong(1);
     }
 }

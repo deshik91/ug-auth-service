@@ -30,9 +30,9 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<?> refresh(@Valid @RequestBody RefreshTokenRequest request) {
-        // TODO: реализовать позже
-        return ResponseEntity.ok("Обновление токена пока не реализовано");
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        AuthResponse response = authService.refresh(request);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/validate")
