@@ -91,4 +91,52 @@ public class AuthService {
 
         return new AuthResponse(accessToken, refreshToken, 15 * 60L);
     }
+
+    public AuthResponse refresh(RefreshTokenRequest request) {
+        // 1. Извлекаем email из refresh токена
+        String email;
+        try {
+            email = jwtUtil.extractEmail(request.getRefreshToken());
+        } catch (Exception e) {
+            throw new RuntimeException("Невалидный refresh токен");
+        }
+
+        // 2. Проверяем тип токена (должен быть refresh)
+        String tokenType;
+        try {
+            tokenType = jwtUtil.extractTokenType(request.getRefreshToken());
+        } catch (Exception e) {
+            throw new RuntimeException("Невалидный refresh токен");
+        }
+
+        if (!"refresh".equals(tokenType)) {
+            throw new RuntimeException("Неверный тип токена. Ожидался refresh токен");
+        }
+
+        // 3. Ищем пользователя
+        User user = userStore.findByEmail(email);
+        if (user == null) {
+            throw new RuntimeException("Пользователь не найден");
+        }
+
+        // 4. Проверяем, что refresh токен совпадает с тем, что мы выдали
+        if (user.getRefreshToken() == null || !user.getRefreshToken().equals(request.getRefreshToken())) {
+            throw new RuntimeException("Refresh токен недействителен или был отозван");
+        }
+
+        // 5. Проверяем, не истек ли refresh токен
+        if (!jwtUtil.validateToken(request.getRefreshToken(), email)) {
+            throw new RuntimeException("Refresh токен истек");
+        }
+
+        // 6. Генерируем новую пару токенов
+        String newAccessToken = jwtUtil.generateAccessToken(email);
+        String newRefreshToken = jwtUtil.generateRefreshToken(email);
+
+        // 7. Обновляем refresh токен у пользователя (ротация токенов)
+        user.setRefreshToken(newRefreshToken);
+        userStore.saveUser(user);
+
+        return new AuthResponse(newAccessToken, newRefreshToken, 15 * 60L);
+    }
 }
