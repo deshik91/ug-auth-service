@@ -14,6 +14,8 @@ import xyz.deshik91.dto.request.RefreshTokenRequest;
 import xyz.deshik91.dto.request.RegisterRequest;
 import xyz.deshik91.dto.response.AuthResponse;
 import xyz.deshik91.repository.InMemoryUserStore;
+import xyz.deshik91.repository.InvitationRepository;
+import xyz.deshik91.repository.UserRepository;
 
 import java.time.Instant;
 
