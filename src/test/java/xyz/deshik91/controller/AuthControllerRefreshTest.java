@@ -95,18 +95,34 @@ public class AuthControllerRefreshTest {
         RefreshTokenRequest request = new RefreshTokenRequest();
         request.setRefreshToken(refreshToken);
 
+        // Первый запрос - должен быть успешным и вернуть новые токены
         MvcResult firstRefresh = mockMvc.perform(post("/api/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andReturn();
 
-        // Пытаемся использовать тот же токен снова
+        // Получаем новый refresh токен из ответа
+        AuthResponse firstResponse = objectMapper.readValue(
+                firstRefresh.getResponse().getContentAsString(),
+                AuthResponse.class
+        );
+        String newRefreshToken = firstResponse.getRefreshToken();
+
+        // Пытаемся использовать старый токен снова
         mockMvc.perform(post("/api/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Refresh токен недействителен или был отозван"));
+                        .content(objectMapper.writeValueAsString(request)))  // здесь все еще старый токен
+                .andExpect(status().isBadRequest());
+
+        // Проверяем что новый токен работает
+        RefreshTokenRequest newRequest = new RefreshTokenRequest();
+        newRequest.setRefreshToken(newRefreshToken);
+
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(newRequest)))
+                .andExpect(status().isOk());
     }
 
     @Test

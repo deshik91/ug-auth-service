@@ -82,11 +82,11 @@ public class AuthService {
             throw new RuntimeException("Неверный email или пароль");
         }
 
-        // 3. Генерируем новые токены
+        // 3. Генерируем новые токены (всегда новые, даже если пользователь уже входил)
         String accessToken = jwtUtil.generateAccessToken(user.getEmail());
         String refreshToken = jwtUtil.generateRefreshToken(user.getEmail());
 
-        // 4. Обновляем refresh токен у пользователя (для возможности инвалидации)
+        // 4. Обновляем refresh токен у пользователя (старый становится недействительным)
         user.setRefreshToken(refreshToken);
         userStore.saveUser(user);
 
