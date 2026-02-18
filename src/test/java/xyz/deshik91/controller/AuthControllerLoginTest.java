@@ -30,6 +30,7 @@ public class AuthControllerLoginTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
     @Autowired
     private UserRepository userRepository;
 

@@ -9,7 +9,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import xyz.deshik91.dto.request.RegisterRequest;
-import xyz.deshik91.repository.InMemoryUserStore;
+import xyz.deshik91.entity.InvitationEntity;
+import xyz.deshik91.repository.InvitationRepository;
+import xyz.deshik91.repository.UserRepository;
+
+import java.time.Instant;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -25,12 +29,24 @@ public class AuthControllerTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private InMemoryUserStore userStore;
+    private InvitationRepository invitationRepository;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @BeforeEach
     void setUp() {
-        // Инициализируем тестовые инвайты
-        userStore.initDefaultInvitation();
+        // Очищаем БД
+        userRepository.deleteAll();
+        invitationRepository.deleteAll();
+
+        // Создаем тестовый инвайт
+        InvitationEntity invitation = new InvitationEntity();
+        invitation.setCode("WELCOME2024");
+        invitation.setUsed(false);
+        invitation.setExpiresAt(Instant.now().plusSeconds(30 * 24 * 60 * 60));
+        invitation.setCreatedAt(Instant.now());
+        invitationRepository.save(invitation);
     }
 
     @Test

@@ -12,8 +12,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import xyz.deshik91.dto.request.RegisterRequest;
 import xyz.deshik91.dto.response.AuthResponse;
-import xyz.deshik91.repository.InMemoryUserStore;
+import xyz.deshik91.entity.InvitationEntity;
+import xyz.deshik91.repository.InvitationRepository;
+import xyz.deshik91.repository.UserRepository;
 
+import java.time.Instant;
 import java.util.Date;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -31,7 +34,10 @@ public class AuthControllerValidateTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private InMemoryUserStore userStore;
+    private InvitationRepository invitationRepository;
+
+    @Autowired
+    private UserRepository userRepository;
 
     private String accessToken;
     private String refreshToken;
@@ -39,8 +45,17 @@ public class AuthControllerValidateTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        userStore.clear();
-        userStore.initDefaultInvitation();
+        // Очищаем БД
+        userRepository.deleteAll();
+        invitationRepository.deleteAll();
+
+        // Создаем тестовый инвайт
+        InvitationEntity invitation = new InvitationEntity();
+        invitation.setCode("WELCOME2024");
+        invitation.setUsed(false);
+        invitation.setExpiresAt(Instant.now().plusSeconds(30 * 24 * 60 * 60));
+        invitation.setCreatedAt(Instant.now());
+        invitationRepository.save(invitation);
 
         // Регистрируем пользователя
         userEmail = "validate@example.com";
@@ -111,10 +126,11 @@ public class AuthControllerValidateTest {
         // Сначала проверяем что токен работает
         mockMvc.perform(get("/api/auth/validate")
                         .header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(true));
 
-        // "Удаляем" пользователя (в нашем случае просто очищаем хранилище)
-        userStore.clear();
+        // "Удаляем" пользователя через репозиторий
+        userRepository.deleteAll();  // Очищаем всех пользователей
 
         // Проверяем снова - должно быть 401
         mockMvc.perform(get("/api/auth/validate")
