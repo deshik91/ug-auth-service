@@ -38,7 +38,13 @@ public class AuthController {
     }
 
     @GetMapping("/validate")
-    public ResponseEntity<ValidateResponse> validate(@RequestHeader("Authorization") String authorization) {
+    public ResponseEntity<ValidateResponse> validate(@RequestHeader(value = "Authorization", required = false) String authorization) {
+        // Если заголовка нет - сразу возвращаем 401
+        if (authorization == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ValidateResponse(null, false, null));
+        }
+
         ValidateResponse response = authService.validateToken(authorization);
 
         if (response.isValid()) {
