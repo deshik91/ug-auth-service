@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import xyz.deshik91.dto.request.LoginRequest;
+import xyz.deshik91.dto.request.RefreshTokenRequest;
 import xyz.deshik91.dto.request.RegisterRequest;
 import xyz.deshik91.dto.response.AuthResponse;
 import xyz.deshik91.model.Invitation;
