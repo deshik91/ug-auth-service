@@ -15,6 +15,8 @@ import xyz.deshik91.dto.request.RegisterRequest;
 import xyz.deshik91.dto.response.AuthResponse;
 import xyz.deshik91.repository.InMemoryUserStore;
 
+import java.time.Instant;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -31,15 +33,27 @@ public class AuthControllerRefreshTest {
     @Autowired
     private InMemoryUserStore userStore;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private InvitationRepository invitationRepository;
+
     private String refreshToken;
 
     @BeforeEach
     void setUp() throws Exception {
-        // Очищаем хранилище перед каждым тестом
-        userStore.clear();
+        // Очищаем БД через репозитории
+        userRepository.deleteAll();
+        invitationRepository.deleteAll();
 
-        // Инициализируем инвайты заново
-        userStore.initDefaultInvitation();
+        // Создаем тестовый инвайт
+        InvitationEntity invitation = new InvitationEntity();
+        invitation.setCode("WELCOME2024");
+        invitation.setUsed(false);
+        invitation.setExpiresAt(Instant.now().plusSeconds(30 * 24 * 60 * 60));
+        invitation.setCreatedAt(Instant.now());
+        invitationRepository.save(invitation);
 
         // Регистрируем пользователя
         RegisterRequest registerRequest = new RegisterRequest();
@@ -50,10 +64,9 @@ public class AuthControllerRefreshTest {
         MvcResult registerResult = mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(registerRequest)))
-                .andExpect(status().isOk())  // Теперь должно быть 200
+                .andExpect(status().isOk())
                 .andReturn();
 
-        // Сохраняем refresh токен из ответа
         AuthResponse authResponse = objectMapper.readValue(
                 registerResult.getResponse().getContentAsString(),
                 AuthResponse.class
